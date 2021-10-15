@@ -40,6 +40,7 @@ def findSplits(XT_i, Y):
                 splitList.append((XT_i[k] + XT_i[k+1]) / 2)
     return splitList
 
+# returns the entropy of a node after splitting into sub branches
 def splitEntropy(X_d, Y, s):
     above_0 = 0
     above_1 = 0
@@ -78,7 +79,7 @@ def splitEntropy(X_d, Y, s):
     N = above_0 + above_1 + below_0 + below_1
     return ((above_0 + above_1) / N) * E_above + ((below_0 + below_1) / N) * E_below
 
-# gives the entropy required for the node
+# calculates the entropy of a node along with the majority class
 def nodeEntropy(Y):
     c0 = 0
     c1 = 0
@@ -102,6 +103,7 @@ def nodeEntropy(Y):
         else:
             return -(p0 * math.log2(p0) + (1 - p0) * math.log2(1 - p0)), majority
     
+# finds the best split with the minimum entropy for the given data sets and returns both threshold value and attribute index
 def split(X, Y):
     minEnt = sys.maxsize * 2 + 1
     threshold = None
@@ -109,9 +111,12 @@ def split(X, Y):
     XT = np.transpose(X)
     YT = np.transpose(Y)
     for i in range(len(XT)):
+        # finds possible split values
         splitList = findSplits(XT[i], YT[0])
         for s in range(len(splitList)):
+            # calculates entropy value for each split
             E = splitEntropy(XT[i], YT[0], splitList[s])
+            # returns as 0 is the minimum value 
             if E == 0.0:
                 return splitList[s], i
             
@@ -121,6 +126,7 @@ def split(X, Y):
                 attr_index = i
     return threshold, attr_index
 
+# branches the data set using split value and the relevant dimension provided
 def getBranchedData(X, Y, s, d):
     X_above = []
     Y_above = []
@@ -146,13 +152,16 @@ class Tree:
         self.leaf = None
         self.depth = depth
     
+    # generates the tree for given data sets X and Y
     def generate(self, X, Y):
         E, majority = nodeEntropy(np.transpose(Y)[0])
+        # returns as a leaf node if the following termination conditions are met
         if E < minThreshold or self.depth > maxDepth:
             self.leaf = majority
             return
         
         self.threshold, self.attr_index = split(X, Y)
+        # returns as a lead node there are no split values found for this data set
         if self.threshold == None:
             self.leaf = majority
             return
@@ -162,6 +171,7 @@ class Tree:
         self.left_branch = Tree(self.depth+1)
         self.right_branch = Tree(self.depth+1)
         
+        # calls sub-trees recursively
         self.left_branch.generate(X_above, Y_above)
         self.right_branch.generate(X_below, Y_below)
         
