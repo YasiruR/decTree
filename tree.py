@@ -218,8 +218,6 @@ def crossValidate(X, Y):
         tree = Tree(0)
         tree.generate(tmp_X, tmp_Y)
         c = tree.predict(X[i])
-#        print('i: ', i + 3, ' = ', c, X[i])
-#        print()
         
         if Y[i][0] == c:
             correct += 1
@@ -247,8 +245,8 @@ def plotData(X, Y):
     plt.axhline(y = 0.4314, color = 'b', linestyle = '-')
     plt.show()
 
-#X, Y = readDataBlobs()
-#crossValidate(X, Y)
+X, Y = readDataBlobs()
+crossValidate(X, Y)
 
 X, Y = readDataFlame()
 crossValidate(X, Y)
@@ -256,7 +254,6 @@ crossValidate(X, Y)
 #plotData(X, Y)
 
 # unit tests #
-
 class Test(unittest.TestCase):
     def test_findSplits(self):
         self.assertEqual(findSplits([0.0, 1.0, 2.0, 3.0, 4.0, 5.0], [0, 0, 1, 0, 1, 1]), [1.5, 2.5, 3.5])
