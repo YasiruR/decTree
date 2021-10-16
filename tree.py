@@ -11,10 +11,12 @@ import numpy as np
 import math
 import csv
 import unittest
+from matplotlib import pyplot as plt
+import seaborn as sns
 from PIL import Image, ImageDraw, ImageFont
 
 minThreshold = 0.00005
-maxDepth = 7
+maxDepth = 4
 
 # takes params as ith row of X transpose (i.e. set of data corresponding to a certain dimension)
 def findSplits(XT_i, Y):
@@ -325,6 +327,7 @@ class Tree:
             c = self.discrete_branches[x[self.attr_index]].predict(x)    
         return c
                 
+# util functions
 def readDataBlobs():
     Y = []
     X = []
@@ -391,11 +394,51 @@ def readDataTemp():
             line_index += 1
     return X, Y
 
-def test(X, Y, attr_types, typ):
+def readDataMpg():
+    Y = []
+    X = []
+    with open('auto-mpg.csv') as file:
+        reader = csv.reader(file)
+        line_index = 0
+        for row in reader:
+            if line_index > 2:
+                val_list = row[0].split()
+                Y.append([float(val_list[0])])
+                X.append([float(val_list[1]), float(val_list[2]), float(val_list[3]), float(val_list[4]), float(val_list[5]), float(val_list[6])])
+            line_index += 1
+    return X, Y
+
+def plotPredictions(x, r, pred_list, img_name):
+    sns.set_color_codes("reset")
+    plt.plot(x, r, label='actual')
+    plt.plot(x, pred_list, label='predicted')
+    plt.legend(loc='upper left')
+    plt.xlabel('year')
+    plt.ylabel('global temperature')
+    plt.savefig('./graphs/' + img_name + '.png')
+    plt.show()
+    
+def testDepth(X, Y):
+    depth_list = []
+    r_list = []
+    for i in range(19):
+        global maxDepth
+        maxDepth = i+1
+        r_sqaure = test(X, Y, None, 'regression', None)
+        depth_list.append(i+1)
+        r_list.append(r_sqaure)
+    plt.plot(depth_list, r_list)
+    plt.xlabel('depth')
+    plt.ylabel('r square')
+    plt.savefig('./graphs/r_sqaure.png')
+    plt.show()
+    
+def test(X, Y, attr_types, typ, img_name):
     train_X = []
     train_Y = []
     test_X = []
     test_Y = []
+    sum_y = 0
     
     test_counter = 0
     for i in range(len(X)):
@@ -407,6 +450,7 @@ def test(X, Y, attr_types, typ):
                 test_counter = 0
             test_X.append(X[i])
             test_Y.append(Y[i])
+            sum_y += Y[i][0]
         test_counter += 1        
             
     tree = Tree(0, typ)
@@ -415,7 +459,10 @@ def test(X, Y, attr_types, typ):
     correct = 0
     wrong = 0
     ineligible = 0
-    sqr_err = 0
+    ss_tot = 0
+    ss_res = 0
+    mean_y = sum_y / len(test_Y)
+    pred_list = []
     for i in range(len(test_X)):    
         c = tree.predict(test_X[i])
         if typ == 'classification':
@@ -427,36 +474,50 @@ def test(X, Y, attr_types, typ):
                 else:
                     wrong += 1
         else:
-            sqr_err += math.pow((Y[i]-c), 2)
+            pred_list.append(c)
+            ss_res += math.pow((Y[i][0] - c), 2)
+            ss_tot += math.pow((Y[i][0] - mean_y), 2)
                 
     if typ == 'classification':
         print("accuracy: ", (correct*100.0)/(correct+wrong), "%")
         if ineligible != 0:
             print("corrected accuracy: ", (correct*100.0)/(correct+wrong-ineligible), "%")
     else:
-        print("root mean square error: ", math.sqrt(sqr_err)/len(test_X))
+        print("root mean square error: ", math.sqrt(ss_res/len(test_X)))   
+        print("R square error: ", 1 - (ss_res / ss_tot))
+        if img_name != None:
+            plotPredictions(test_X, test_Y, pred_list, img_name)
+        return 1 - (ss_res / ss_tot)
         
-
 attr_types = ['continuous', 'continuous']
 print('-----blobs data set (continuous)-------')
 X, Y = readDataBlobs()
-test(X, Y, attr_types, 'classification')
+test(X, Y, attr_types, 'classification', None)
 print()
 
 print('-----flame data set (continuous)-------')
 X, Y = readDataFlame()
-test(X, Y, attr_types, 'classification')
+test(X, Y, attr_types, 'classification', None)
 print()
 
 attr_types = ['discrete', 'discrete', 'discrete', 'discrete', 'discrete', 'discrete', 'discrete', 'discrete', 'discrete']
 print('-----tic-tac data set (discrete)-------')
 X, Y = readDataTicTac()
-test(X, Y, attr_types, 'classification')
+test(X, Y, attr_types, 'classification', None)
 print()
 
 print('-----global temperature data set (regression)-------')
 X, Y = readDataTemp()
-test(X, Y, None, 'regression')
+test(X, Y, None, 'regression', 'global_temp_pred')
+print()
+        
+print('-----auto mpg data set (regression)-------')
+X, Y = readDataMpg()
+test(X, Y, None, 'regression', None)
+print()
+        
+print('-----auto mpg test with depth (regression)-------')
+testDepth(X, Y)
 
 # Q: will it be fair to compare entropy of discrete and continuous 
 # Q: what if training node might not have all possible classes in discrete
