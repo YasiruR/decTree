@@ -12,6 +12,7 @@ import math
 import csv
 from matplotlib import pyplot as plt
 import unittest
+from PIL import Image, ImageDraw, ImageFont
 
 minThreshold = 0.00005
 maxDepth = 7
@@ -79,6 +80,39 @@ def splitEntropy(X_d, Y, s):
     N = above_0 + above_1 + below_0 + below_1
     return ((above_0 + above_1) / N) * E_above + ((below_0 + below_1) / N) * E_below
 
+def splitEntropyDiscrete(X_d, Y):
+    counters = {}
+    for i in range(len(X_d)):
+        if X_d[i] in counters:
+            continue
+        else:
+            counters[X_d[i]] = 0
+            
+    classes = {}
+    for disc_val in counters:
+        classes[disc_val] = {0: 0, 1: 0}
+        
+    for i in range(len(X_d)):
+        counters[X_d[i]] += 1
+        if Y[i] == 0:
+            classes[X_d[i]][0] += 1
+        else:
+            classes[X_d[i]][1] += 1
+    
+    N = len(X_d)
+    E = 0
+    for disc_val in counters:
+        p_0 = classes[disc_val][0] / N
+        p_1 = classes[disc_val][1] / N
+        if p_0 == 0.0:
+            E -= (counters[disc_val] / N) * (p_1 * math.log2(p_1))
+        else:
+            if p_1 == 0.0:
+                E -= (counters[disc_val] / N) * (p_0 * math.log2(p_0))
+            else:
+                E -= (counters[disc_val] / N) * (p_0 * math.log2(p_0) + p_1 * math.log2(p_1))
+    return E
+
 # calculates the entropy of a node along with the majority class
 def nodeEntropy(Y):
     c0 = 0
@@ -104,27 +138,37 @@ def nodeEntropy(Y):
             return -(p0 * math.log2(p0) + (1 - p0) * math.log2(1 - p0)), majority
     
 # finds the best split with the minimum entropy for the given data sets and returns both threshold value and attribute index
-def split(X, Y):
+def split(X, Y, attr_types):
     minEnt = sys.maxsize * 2 + 1
     threshold = None
     attr_index = None
     XT = np.transpose(X)
     YT = np.transpose(Y)
     for i in range(len(XT)):
-        # finds possible split values
-        splitList = findSplits(XT[i], YT[0])
-        for s in range(len(splitList)):
-            # calculates entropy value for each split
-            E = splitEntropy(XT[i], YT[0], splitList[s])
-            # returns as 0 is the minimum value 
-            if E == 0.0:
-                return splitList[s], i
-            
-            if E < minEnt:
-                minEnt = E
-                threshold = splitList[s]
-                attr_index = i
-    return threshold, attr_index
+        if attr_types[i] == 'c':
+            # finds possible split values
+            splitList = findSplits(XT[i], YT[0])
+            for s in range(len(splitList)):
+                # calculates entropy value for each split
+                E = splitEntropy(XT[i], YT[0], splitList[s])
+                # returns as 0 is the minimum value 
+                if E == 0.0:
+                    return splitList[s], i, 'c'
+                if E < minEnt:
+                    minEnt = E
+                    threshold = splitList[s]
+                    attr_index = i
+                    split_type = 'c'
+        else:
+            if attr_types[i] == 'd':    
+                E = splitEntropyDiscrete(XT[i], YT[0])
+                if E == 0.0:
+                    return None, i, 'd'
+                if E < minEnt:
+                    minEnt = E
+                    attr_index = i
+                    split_type = 'd'
+    return threshold, attr_index, split_type
 
 # branches the data set using split value and the relevant dimension provided
 def getBranchedData(X, Y, s, d):
@@ -141,7 +185,20 @@ def getBranchedData(X, Y, s, d):
             X_below.append(X[i])
             Y_below.append(Y[i])
     return X_above, Y_above, X_below, Y_below
-            
+
+def getDiscreteBranchedData(X, Y, d):
+    branched_X = {}
+    branched_Y = {}
+    XT_d = np.transpose(X)[d]
+    for i in range(len(XT_d)):
+        if not XT_d[i] in branched_X:
+            branched_X[XT_d[i]] = []
+            branched_Y[XT_d[i]] = []
+        branched_X[XT_d[i]].append(X[i])
+        branched_Y[XT_d[i]].append(Y[i])
+    return branched_X, branched_Y
+
+
 # object resembles the tree structure recursively attached with sub-trees
 class Tree:
     def __init__(self, depth):
@@ -150,44 +207,55 @@ class Tree:
         self.left_branch = None
         self.right_branch = None
         self.leaf = None
+        self.discrete_branches = None
         self.depth = depth
     
     # generates the tree for given data sets X and Y
-    def generate(self, X, Y):
+    def generate(self, X, Y, attr_types):
         E, majority = nodeEntropy(np.transpose(Y)[0])
         # returns as a leaf node if the following termination conditions are met
         if E < minThreshold or self.depth > maxDepth:
             self.leaf = majority
             return
         
-        self.threshold, self.attr_index = split(X, Y)
-        # returns as a lead node there are no split values found for this data set
-        if self.threshold == None:
-            self.leaf = majority
-            return
-        
-        X_above, Y_above, X_below, Y_below = getBranchedData(X, Y, self.threshold, self.attr_index)
-        
-        self.left_branch = Tree(self.depth+1)
-        self.right_branch = Tree(self.depth+1)
-        
-        # calls sub-trees recursively
-        self.left_branch.generate(X_above, Y_above)
-        self.right_branch.generate(X_below, Y_below)
+        self.threshold, self.attr_index, split_type = split(X, Y, attr_types)
+        if split_type == 'c':
+            # returns as a lead node there are no split values found for this data set
+            if self.threshold == None:
+                self.leaf = majority
+                return
+            X_above, Y_above, X_below, Y_below = getBranchedData(X, Y, self.threshold, self.attr_index)
+            self.left_branch = Tree(self.depth+1)
+            self.right_branch = Tree(self.depth+1)
+            # calls sub-trees recursively
+            self.left_branch.generate(X_above, Y_above, attr_types)
+            self.right_branch.generate(X_below, Y_below, attr_types)
+        else:
+            branched_X, branched_Y = getDiscreteBranchedData(X, Y, self.attr_index)
+            self.discrete_branches = {}
+            for disc_val in branched_X:
+                self.discrete_branches[disc_val] = Tree(self.depth+1)
+                self.discrete_branches[disc_val].generate(branched_X[disc_val], branched_Y[disc_val], attr_types)
         
     def predict(self, x):
         if self.leaf != None:
             return self.leaf
-        if self.attr_index == 0:
-            if x[0] > self.threshold:
-                c = self.left_branch.predict(x)
+        
+        if self.discrete_branches == None:  
+            if self.attr_index == 0:
+                if x[0] > self.threshold:
+                    c = self.left_branch.predict(x)
+                else:
+                    c = self.right_branch.predict(x)
             else:
-                c = self.right_branch.predict(x)
-        else:
-            if x[1] > self.threshold:
-                c = self.left_branch.predict(x)
-            else:
-                c = self.right_branch.predict(x)
+                if x[1] > self.threshold:
+                    c = self.left_branch.predict(x)
+                else:
+                    c = self.right_branch.predict(x)
+        else:            
+            if not x[self.attr_index] in self.discrete_branches:
+                return -2
+            c = self.discrete_branches[x[self.attr_index]].predict(x)    
         return c
                 
 def readDataBlobs():
@@ -218,50 +286,87 @@ def readDataFlame():
             line_index += 1
     return X, Y
 
-def crossValidate(X, Y):
+def readDataTicTac():
+    X = []
+    Y = []
+    with open('tictac-end.csv') as file:
+        reader = csv.reader(file)
+        line_count = 0
+        for row in reader:
+            if line_count >= 7:
+                Y.append([int(row[0][0])])
+                x = []
+                i = 2
+                while True:
+                    if len(x) == 9:
+                        break
+                    else:
+                        if row[0][i] == '-':
+                            i += 1
+                            x.append(-(int(row[0][i])))
+                        else:
+                            x.append(int(row[0][i]))                            
+                    i += 2
+                X.append(x)
+            line_count += 1
+    return X, Y
+
+def test(X, Y, attr_types):
+    train_X = []
+    train_Y = []
+    test_X = []
+    test_Y = []
+    
+    test_counter = 0
+    for i in range(len(X)):
+        if test_counter < 7:
+            train_X.append(X[i])
+            train_Y.append(Y[i])
+        else:
+            if test_counter == 9:
+                test_counter = 0
+            test_X.append(X[i])
+            test_Y.append(Y[i])
+        test_counter += 1        
+            
+    tree = Tree(0)
+    tree.generate(train_X, train_Y, attr_types)
+    
     correct = 0
     wrong = 0
-    for i in range(len(X)):
-        tmp_X = np.delete(X, i, axis=0)
-        tmp_Y = np.delete(Y, i, axis=0)
-        
-        tree = Tree(0)
-        tree.generate(tmp_X, tmp_Y)
-        c = tree.predict(X[i])
-        
-        if Y[i][0] == c:
+    ineligible = 0
+    for i in range(len(test_X)):    
+        c = tree.predict(test_X[i])
+        if c == test_Y[i][0]:
             correct += 1
         else:
-            wrong += 1
+            if c == -2:
+                ineligible += 1
+            else:
+                wrong += 1
     print("accuracy: ", (correct*100.0)/(correct+wrong), "%")
-
-def plotData(X, Y):
-    x_0 = []
-    x_1 = []
-    y_0 = []
-    y_1 = []
-    for i in range(len(X)):
-        if Y[i][0] == 0:
-            x_0.append(X[i][0])
-            y_0.append(X[i][1])
-        else:
-            x_1.append(X[i][0])
-            y_1.append(X[i][1])
     
-    plt.scatter(x_0, y_0, color='green')
-    plt.scatter(x_1, y_1, color='brown')
-    
-    plt.axvline(x = 0.5, color = 'r', linestyle = '--')
-    plt.axhline(y = 0.4314, color = 'b', linestyle = '-')
-    plt.show()
+    if ineligible != 0:
+        print("corrected accuracy: ", (correct*100.0)/(correct+wrong-ineligible), "%")
 
+attr_types = ['c', 'c']
+print('-----blobs data set (continuous)-------')
 X, Y = readDataBlobs()
-crossValidate(X, Y)
+test(X, Y, attr_types)
+print()
 
+print('-----flame data set (continuous)-------')
 X, Y = readDataFlame()
-crossValidate(X, Y)
+test(X, Y, attr_types)
+print()
 
-#plotData(X, Y)
+attr_types = ['d', 'd', 'd', 'd', 'd', 'd', 'd', 'd', 'd']
+print('-----tic-tac data set (discrete)-------')
+X, Y = readDataTicTac()
+test(X, Y, attr_types)
+
+# Q: will it be fair to compare entropy of discrete and continuous 
+# Q: what if training node might not have all possible classes in discrete
 
 # unit tests #
 class Test(unittest.TestCase):
