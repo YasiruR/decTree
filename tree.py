@@ -81,6 +81,7 @@ def splitEntropy(X_d, Y, s):
     N = above_0 + above_1 + below_0 + below_1
     return ((above_0 + above_1) / N) * E_above + ((below_0 + below_1) / N) * E_below
 
+# returns split entropy of a node after splitting into sub-branches for discrete attributes
 def splitEntropyDiscrete(X_d, Y):
     counters = {}
     for i in range(len(X_d)):
@@ -328,10 +329,11 @@ class Tree:
         return c
                 
 # util functions
+# below functions carry out processing data from sample data-sets, test each data-set using the decision tree and report corresponding errors
 def readDataBlobs():
     Y = []
     X = []
-    with open('blobs.csv') as file:
+    with open('data/blobs.csv') as file:
         reader = csv.reader(file)
         line_index = 0
         for row in reader:
@@ -345,7 +347,7 @@ def readDataBlobs():
 def readDataFlame():
     Y = []
     X = []
-    with open('flame.csv') as file:
+    with open('data/flame.csv') as file:
         reader = csv.reader(file)
         line_index = 0
         for row in reader:
@@ -359,7 +361,7 @@ def readDataFlame():
 def readDataTicTac():
     X = []
     Y = []
-    with open('tictac-end.csv') as file:
+    with open('data/tictac-end.csv') as file:
         reader = csv.reader(file)
         line_count = 0
         for row in reader:
@@ -384,7 +386,7 @@ def readDataTicTac():
 def readDataTemp():
     Y = []
     X = []
-    with open('global-temperatures.csv') as file:
+    with open('data/global-temperatures.csv') as file:
         reader = csv.reader(file)
         line_index = 0
         for row in reader:
@@ -397,7 +399,7 @@ def readDataTemp():
 def readDataMpg():
     Y = []
     X = []
-    with open('auto-mpg.csv') as file:
+    with open('data/auto-mpg.csv') as file:
         reader = csv.reader(file)
         line_index = 0
         for row in reader:
@@ -433,6 +435,10 @@ def testDepth(X, Y):
     plt.savefig('./graphs/r_sqaure.png')
     plt.show()
     
+# general test function when given lists of x and y values along with other parameters.
+# attr_types - list of elements indicating whether each data type is continuous or discrete
+# typ - classification/regression
+# img_name - optional name for saving images
 def test(X, Y, attr_types, typ, img_name):
     train_X = []
     train_Y = []
@@ -519,10 +525,6 @@ print()
 print('-----auto mpg test with depth (regression)-------')
 testDepth(X, Y)
 
-# Q: will it be fair to compare entropy of discrete and continuous 
-# Q: what if training node might not have all possible classes in discrete
-# Q: plotting the tree
-
 # unit tests #
 class Test(unittest.TestCase):
     def test_findSplits(self):
@@ -542,19 +544,3 @@ class Test(unittest.TestCase):
     def test_getBranchedData(self):
         self.assertEqual(getBranchedData([[11, 13], [8, 7], [1, 11], [11, 1]], [[0], [1], [1], [0]], 10, 1), ([[11, 13], [1, 11]], [[0], [1]], [[8, 7], [11, 1]], [[1], [0]]))
         self.assertEqual(getBranchedData([[11, 13], [8, 7], [1, 11], [11, 1]], [[0], [1], [1], [0]], 9, 0), ([[11, 13], [11, 1]], [[0], [0]], [[8, 7], [1, 11]], [[1], [1]]))
-        
-#def visualize(img, tree):        
-#    if img == None:
-#        font = ImageFont.truetype("arial.ttf", 20)
-#        img = Image.new('RGB', (1200, 1200), (255, 255, 255))
-#    draw = ImageDraw.Draw(img)
-#    draw.ellipse((500, 50, 680, 120), fill=(255, 255, 255), outline=(0, 0, 0))
-#    
-#    if tree.leaf != None:
-#        draw.text((520, 75), tree.leaf, font=font, fill=(0, 0, 0))
-#    else:
-#        inputs = ['x', 'y']
-#        draw.text((520, 75), inputs[tree.attr_index] + '>' + tree.threshold, font=font, fill=(0, 0, 0))        
-#        draw.line((550, 80, 450, 100))
-#    
-#    img.show()
